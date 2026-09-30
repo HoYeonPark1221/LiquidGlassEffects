@@ -43,11 +43,12 @@ public enum GlassVariant: Int, CaseIterable, Identifiable, Sendable {
 
 /// A finer variant layered on top of a ``GlassVariant``.
 ///
-/// Names are strings found in the system frameworks (`DesignLibrary`'s
-/// `GlassMaterialProvider.Subvariant` is created from a `String`); `default`, `camera` and
-/// `track` could not be located there. On current macOS `set_subvariant:` takes an `NSString`,
-/// so the bridge passes the case name. The raw value is only used by the integer fallback. The
-/// setter accepts any string, so a successful `apply` means "sent", not "recognised".
+/// Names are strings (`DesignLibrary`'s `GlassMaterialProvider.Subvariant` is created from a
+/// `String`). On macOS 27.2 every case except `track` is in Apple's name table, which is longer
+/// than this enum; `tab` sits where `track` would be, so `track` is unverified. On current macOS
+/// `set_subvariant:` takes an `NSString`, so the bridge passes the case name. The raw value is
+/// only used by the integer fallback. The setter accepts any string, so a successful `apply`
+/// means "sent", not "recognised".
 public enum GlassSubvariant: Int, CaseIterable, Identifiable, Sendable {
     case `default` = 0
     case lockscreenControls = 1
