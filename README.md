@@ -2,9 +2,9 @@
 
 SwiftUI access to the 24 Liquid Glass material variants (and 10 of the subvariants) inside AppKit's `NSGlassEffectView` — far more than the two (`.regular` / `.clear`) that the public `.glassEffect` API exposes.
 
-![All 24 variants over the same detailed backdrop](Docs/gallery.png)
+![All 24 variants on the same backdrop](Docs/gallery.png)
 
-*All 24 variants over the same backdrop, from a demo app that is not part of this package. macOS 27.2, dark appearance, active window: glass renders differently in an inactive window.*
+*All 24 variants on the same backdrop, from a demo app that is not part of this package. macOS 27.2, active window: glass renders differently in an inactive window.*
 
 > ⚠️ **Private API.** `NSGlassEffectView` itself is public AppKit (macOS 26+), but its `_variant` / `_subvariant` properties are not. This package sets them through the Objective-C runtime. **Apps using it will likely be rejected from the Mac App Store.** It is meant for developer-ID / direct-distribution apps, internal tools and experiments. Apple can rename or remove these selectors in any macOS update.
 
