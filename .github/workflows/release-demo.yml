@@ -1,0 +1,23 @@
+name: Release demo app
+
+# Builds GlassLab.app when a release is published and attaches the zip to it.
+# The app is ad-hoc signed; for a notarized build run Scripts/make-demo-app.sh locally with
+# DEVELOPER_ID and NOTARY_PROFILE set (see the script).
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  demo:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build GlassLab.app
+        run: Scripts/make-demo-app.sh
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/GlassLab.zip --clobber

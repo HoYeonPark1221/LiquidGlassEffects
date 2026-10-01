@@ -1,34 +1,91 @@
 # LiquidGlassEffects
 
-SwiftUI access to the 24 Liquid Glass material variants (and 10 of the subvariants) inside AppKit's `NSGlassEffectView` — far more than the two (`.regular` / `.clear`) that the public `.glassEffect` API exposes.
+![A glass panel tours several variants and shapes over a sunset](Docs/glasslab-tour.gif)
 
-![All 24 variants, each over the same photo](Docs/gallery-photo.png)
+**macOS has 24 Liquid Glass materials. SwiftUI's `.glassEffect` gives you two.** This package gives you the rest, plus 53 subvariants, any `Shape`, and a playground to try them in.
 
-*All 24 variants, each over its own copy of the same photo crop, so only the glass differs. `FocusBorder` and `FocusPlatter` draw nothing on their own. From a demo app that is not part of this package. macOS 27.2, active window: in an inactive window the glass renders flat and most variants look alike.*
-
-> ⚠️ **Private API.** `NSGlassEffectView` itself is public AppKit (macOS 26+), but its `_variant` / `_subvariant` properties are not. This package sets them through the Objective-C runtime. **Apps using it will likely be rejected from the Mac App Store.** It is meant for developer-ID / direct-distribution apps, internal tools and experiments. Apple can rename or remove these selectors in any macOS update.
-
-## Safety model
-
-- Nothing is linked at compile time; the class and selectors are looked up at runtime.
-- Before an IMP is called, its type encoding is checked (an `NSInteger` or `NSString` argument, `void` return for setters). A renamed or re-typed selector is skipped instead of crashing.
-- If anything is missing, calls are no-ops, getters return `nil`, and the view falls back to an `NSVisualEffectView` blur.
-- `GlassVariantBridge.variant(of:)` reads the value back, so you can verify a variant actually applied.
-
-## Usage
+[![CI](https://github.com/HoYeonPark1221/LiquidGlassEffects/actions/workflows/ci.yml/badge.svg)](https://github.com/HoYeonPark1221/LiquidGlassEffects/actions/workflows/ci.yml)
+![Swift 5.9+](https://img.shields.io/badge/Swift-5.9+-orange)
+![macOS 13+](https://img.shields.io/badge/macOS-13+-blue)
+![License MIT](https://img.shields.io/badge/license-MIT-green)
 
 ```swift
 import LiquidGlassEffects
 
-// A container
-LiquidGlassBackground(variant: .bubbles, cornerRadius: 16) {
-    Text("Hello, glass").padding()
-}
+Text("Hello, glass")
+    .padding(32)
+    .privateGlassBackground(.bubbles, in: Capsule())
+```
 
-// A background modifier
+> ⚠️ **Private API.** `NSGlassEffectView` itself is public AppKit (macOS 26+), but its `_variant` / `_subvariant` / `_setPath:` are not. This package sets them through the Objective-C runtime. **Apps using it will likely be rejected from the Mac App Store.** It is meant for developer-ID / direct-distribution apps, internal tools and experiments. Apple can rename or remove these selectors in any macOS update.
+
+## Try it
+
+GlassLab is a playground for every variant: pick a variant and a subvariant, change the shape, tint it, drag the glass over your own image, and copy the Swift that produces it.
+
+```sh
+git clone https://github.com/HoYeonPark1221/LiquidGlassEffects.git
+cd LiquidGlassEffects/Examples/GlassLab
+swift run
+```
+
+Or download `GlassLab.zip` from the [Releases](https://github.com/HoYeonPark1221/LiquidGlassEffects/releases) page. It is ad-hoc signed, so on first launch right-click the app and choose Open.
+
+![GlassLab: variant list, a draggable glass panel, and an inspector](Docs/glasslab-playground.png)
+
+## Install
+
+```swift
+.package(url: "https://github.com/HoYeonPark1221/LiquidGlassEffects.git", from: "0.2.0")
+```
+
+Requires macOS 13+. The real glass needs a macOS that ships `NSGlassEffectView` (macOS 26+); on anything older the same code falls back to an `NSVisualEffectView` blur.
+
+## Usage
+
+**A background modifier**
+
+```swift
 Text("Hello, glass")
     .padding()
     .privateGlassBackground(.avplayer, subvariant: .lockscreenControls, cornerRadius: 20)
+```
+
+**Any shape**, like `.glassEffect(in:)`. `Rectangle`, `RoundedRectangle` and `Capsule` use the glass view's own corner radius; everything else (`Circle`, your own `Shape`) goes through the private `_setPath:`.
+
+```swift
+struct Star: Shape { /* ... */ }
+
+Color.clear
+    .frame(width: 160, height: 160)
+    .privateGlassBackground(.bubbles, in: Star())
+```
+
+**Tint and interactive glass**
+
+```swift
+Text("Tinted")
+    .padding()
+    .privateGlassBackground(.dock, in: Capsule(), tint: .blue, isInteractive: true)
+```
+
+`tint` is the public `NSGlassEffectView.tintColor`. `isInteractive` is the public `effectIsInteractive`, available from macOS 27.
+
+**A container**
+
+```swift
+LiquidGlassBackground(variant: .bubbles, cornerRadius: 16) {
+    Text("Hello, glass").padding()
+}
+```
+
+The content is handed to `NSGlassEffectView.contentView`, and the container sizes itself from it.
+
+**Any subvariant.** `GlassSubvariant` is a name, so a string works too:
+
+```swift
+.privateGlassBackground(.dock, subvariant: .menu)
+.privateGlassBackground(.dock, subvariant: "someNameAppleAddsLater")
 ```
 
 Glass refracts what is behind it. Over a flat colour every variant looks the same, so judge them over a colourful or detailed backdrop. `GlassVariantGalleryView()` shows all 24 side by side:
@@ -37,136 +94,53 @@ Glass refracts what is behind it. Over a flat colour every variant looks the sam
 GlassVariantGalleryView()
 ```
 
-## Install
+## Which variants look different?
 
-```swift
-.package(url: "https://github.com/HoYeonPark1221/LiquidGlassEffects.git", from: "0.1.0")
-```
+Seen over the GlassLab scene on macOS 27.2, in an active window:
 
-Requires macOS 13+. The real glass needs a macOS that ships `NSGlassEffectView` (macOS 26+).
+| Variant | Looks like |
+|---|---|
+| `bubbles` | strong bright rim, magnifying refraction |
+| `loupe` | nearly transparent, distorted edge: a lens |
+| `dock` | glossy, tinted, strong refraction |
+| `avplayer` | bright frosted glass with a soft highlight |
+| `regular` | frosted grey blur, little refraction |
+| `text` | dark glass |
+| `focusBorder`, `focusPlatter` | draw nothing on their own |
 
-## Under the hood
+The rest are in the [full table](Docs/Internals.md#the-24-variants) with a photo of all 24.
 
-### What is public, what is private
+## FAQ
 
-`NSGlassEffectView` is public AppKit (macOS 26+). Its public properties are `contentView`, `cornerRadius`, `tintColor`, `style` (`.regular` or `.clear`) and, from macOS 27, `effectIsInteractive`. The header:
+**Can I ship this in the Mac App Store?** Almost certainly not: it uses private selectors. Use it for developer-ID apps, internal tools and experiments.
 
-```
-/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/AppKit.framework/Headers/NSGlassEffectView.h
-```
+**Why not just `.glassEffect`?** It offers `.regular` and `.clear`. Apple's own Dock, Control Center, sidebars and magnifier use other presets, and this is the only way to reach them from your app.
 
-Behind `style`, the look of the glass is a *material* chosen by private properties. A **variant** is a whole preset (blur, refraction, highlights, tint). A **subvariant** is a name layered on top of it.
+**What if Apple renames something?** Nothing crashes. See the safety model below: a missing selector is skipped, and you get the system default glass, or a blur on older macOS.
 
-| Private selectors | Type | Used here | What it does |
-|---|---|---|---|
-| `_variant` / `set_variant:` | `NSInteger` | yes | Picks one of the 24 variants |
-| `_subvariant` / `set_subvariant:` | `NSString` (macOS 27.2) | yes | Picks a subvariant by name |
-| `_effectInteractiveVariantName` / `set_effectInteractiveVariantName:` | object | no | Unknown; the name suggests the variant used for interactive glass |
+**Why does the glass look flat?** The window is not active. Glass renders flat in an inactive window, and some variants (`dock`) change a lot. Judge them in an active window.
 
-### The private framework
+**Does it work on iOS?** No. `NSGlassEffectView` is AppKit; iOS's `UIGlassEffect` is a different class with different knobs.
 
-The names come from Apple's private `DesignLibrary` framework. On disk it is only a stub: the code lives in the dyld shared cache, and tools such as `dyld_info` resolve these paths from there.
+## Safety model
 
-```
-/System/Library/PrivateFrameworks/DesignLibrary.framework
-```
+- Nothing is linked at compile time; the class and selectors are looked up at runtime.
+- Before an IMP is called, its type encoding is checked (`NSInteger`, `BOOL`, `double`, object or `CGPath` argument, `void` return for setters). A renamed or re-typed selector is skipped instead of crashing.
+- If anything is missing, calls are no-ops, getters return `nil`, and the view falls back to an `NSVisualEffectView` blur.
+- `GlassVariantBridge.variant(of:)` reads the value back, so you can verify a variant actually applied.
+- CI round-trips all 24 variants and 53 subvariant names through the real view on macOS 26, so a removed setter shows up as a red build.
 
-```
-/System/Library/PrivateFrameworks/DesignLibrary.framework/DesignLibrary
-```
+## How it works
 
-The variants are the cases of `GlassMaterialProvider.Variant` in that framework. The subvariant names are plain strings that you only find in the shared cache (Apple silicon):
-
-```
-/System/Volumes/Preboot/Cryptexes/OS/System/Library/dyld/
-```
-
-### The 24 variants
-
-Apple does not document these. The last column is a guess from the name, plus what the demo screenshot shows.
-
-| # | Variant | Name suggests |
-|---|---|---|
-| 0 | `regular` | standard glass |
-| 1 | `clear` | clear glass |
-| 2 | `dock` | the Dock |
-| 3 | `appIcons` | app icons |
-| 4 | `widgets` | widgets |
-| 5 | `text` | text on glass |
-| 6 | `avplayer` | media player; looks bright and glossy |
-| 7 | `facetime` | FaceTime |
-| 8 | `controlCenter` | Control Center |
-| 9 | `notificationCenter` | notifications |
-| 10 | `monogram` | monogram badge |
-| 11 | `bubbles` | bubble; strong bright rim and refraction |
-| 12 | `identity` | identity |
-| 13 | `focusBorder` | focus ring border; draws nothing on its own |
-| 14 | `focusPlatter` | focus platter; draws nothing on its own |
-| 15 | `keyboard` | keyboard keys |
-| 16 | `sidebar` | sidebar |
-| 17 | `abuttedSidebar` | sidebar that abuts the content |
-| 18 | `inspector` | inspector panel |
-| 19 | `control` | controls |
-| 20 | `loupe` | magnifier; nearly transparent with edge distortion |
-| 21 | `slider` | slider |
-| 22 | `camera` | camera UI |
-| 23 | `cartouchePopover` | popover (a cartouche is an ornamental frame) |
-
-### Subvariants
-
-A subvariant is a name (a string) layered on top of a variant. `GlassSubvariant` has ten:
-
-`default` · `lockscreenControls` · `homescreenClose` · `camera` · `posterSwitcher` · `homescreenResizeHandle` · `cursorAccessory` · `homescreenFolder` · `track` · `focusedButtonFill`
-
-The names point at iOS and watchOS surfaces (lock screen, home screen, poster switcher). Setting a known name changes the rendered glass on macOS, sometimes only slightly (checked with screenshot diffs).
-
-Apple's name table on macOS 27.2 is much longer: 53 names from `default` to `homeLiveActivity`, presumably the subvariant list. This package does not expose the rest yet. Nine of its ten names are in that table. `track` is not: `tab` sits at its position, so `.track` is unverified.
-
-<details>
-<summary>All 53 names in the table (macOS 27.2)</summary>
-
-`default` · `lockscreenControls` · `lockscreenNotifications` · `lockscreenPriorityNotifications` · `homescreenClose` · `camera` · `posterSwitcher` · `homescreenResizeHandle` · `cursorAccessory` · `transientCanvas` · `listening` · `thinking` · `response` · `spotlightField` · `searchResults` · `compose` · `homescreenFolder` · `tab` · `focusedButtonFill` · `entryField` · `volumeSlider` · `customizeSheet` · `watchFacePhotos` · `watchFacePhotosMini` · `watchFaceFlowStencil` · `watchFaceFlowSolid` · `watchPasscode` · `homescreenAppLibraryPod` · `menu` · `window` · `documentModalWindow` · `watchSmartStack` · `watchSmartStackFace` · `watchSmartStackAnimatedContent` · `siriSnippet` · `alarmSlider` · `alarmSliderRed` · `contactsQuickAction` · `mapsSign` · `mapsNavigationSign` · `sheet` · `messagesTapback` · `cluster` · `secondaryCluster` · `dock` · `appSwitcher` · `watchDetuned` · `homeModularFace` · `homeFaceFlow` · `tvPortraitClock` · `hdr` · `campoCard` · `homeLiveActivity`
-
-</details>
-
-### Other things in the framework
-
-Not used here. Most are Swift structs and enums, which the Objective-C runtime cannot call. Seen in the exported symbols: `GlassMaterialProvider` (with `Variant`, `Subvariant`, `Configuration` and `Options`), `RegularGlassMaterialProvider`, `ClearGlassMaterialProvider`, `GlassEdgeMaterialProvider`, `GlassGroupContext`, `WindowControl` (the window buttons, with their own variants), and drawing code for `Slider`, `Stepper`, `Switch`, `ProgressIndicator` and `ScrollPocket`.
-
-## Explore it yourself
-
-List the variant cases in declaration order. This is how the numbers in `GlassVariant` were checked:
-
-```sh
-xcrun dyld_info -exports /System/Library/PrivateFrameworks/DesignLibrary.framework/DesignLibrary | grep 'GlassMaterialProviderV7VariantO.*yA2EmFWC' | sort | sed -E 's/.*VariantO[0-9]+([A-Za-z]+)yA2EmFWC.*/\1/' | nl -v 0
-```
-
-Print the subvariant name table from the shared cache. `.05` is the piece that holds it on macOS 27.2; other builds may use another piece, and the start and end markers may move:
-
-```sh
-strings -a -n 3 /System/Volumes/Preboot/Cryptexes/OS/System/Library/dyld/dyld_shared_cache_arm64e.05 | awk 'p=="unsupported" && $0=="default"{f=1} f{print} f && $0=="homeLiveActivity"{exit} {p=$0}'
-```
-
-## After a macOS update
-
-```swift
-#if DEBUG
-GlassVariantBridge.dumpVariantSelectors()
-#endif
-```
-
-prints the current variant-related selectors and their type encodings. Re-run the commands above to see whether Apple added or renamed variants and subvariants. `swift test` (via Xcode's toolchain) round-trips all 24 variants through the real view and fails if a setter disappeared.
-
-## Verified on
-
-macOS 27.2, with Xcode's toolchain:
-
-- All 24 variants are set and read back through the real view. Their names and order match the case symbols exported by `DesignLibrary.framework`. Several render clearly differently (for example `bubbles`, `avplayer` and `loupe`); others look alike over a simple backdrop, and `focusBorder` / `focusPlatter` look empty as a plain background. Rendering also differs between an active and an inactive window.
-- `set_subvariant:` takes an `NSString` on this system, so the bridge passes the case name. Nine of the ten names in `GlassSubvariant` are in Apple's name table; `track` is not (`tab` is). The setter accepts any string, so `apply` returning `true` means the call was made, not that the system recognised the name.
+How the variants were found, what the other private knobs do, and how to check again after a macOS update: [Docs/Internals.md](Docs/Internals.md).
 
 ## Platform
 
-macOS only. `NSGlassEffectView` is AppKit; iOS's `UIGlassEffect` is a different class with different knobs and is not covered.
+macOS only.
+
+## Contributing
+
+An issue with the macOS build and the output of `GlassVariantBridge.dumpVariantSelectors()` is the most useful thing you can send after an OS update.
 
 ## Disclaimer
 

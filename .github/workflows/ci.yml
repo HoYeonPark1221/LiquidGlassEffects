@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: macOS ${{ matrix.macos }}
+    runs-on: macos-${{ matrix.macos }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # 26 has NSGlassEffectView, so the real-glass tests run. 15 has not, so only the
+        # blur fallback is exercised and the real-glass tests skip.
+        macos: ["26", "15"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+      - name: Build GlassLab
+        run: swift build
+        working-directory: Examples/GlassLab
