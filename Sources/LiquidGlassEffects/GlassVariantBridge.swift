@@ -1,8 +1,8 @@
 import AppKit
 import ObjectiveC
 
-/// Talks to `NSGlassEffectView`'s private `_variant` / `_subvariant` properties through the
-/// Objective-C runtime.
+/// Talks to `NSGlassEffectView` through the Objective-C runtime: the private `_variant` /
+/// `_subvariant` / `_setPath:` selectors and a few public properties.
 ///
 /// Nothing here is linked at compile time. If a class or selector disappears in a future macOS,
 /// every call silently does nothing (and getters return `nil`) — the glass just stays at the
@@ -11,20 +11,31 @@ import ObjectiveC
 ///
 /// Calling an IMP with the wrong signature crashes with `EXC_BAD_ACCESS`, so a selector's
 /// existence is never trusted on its own: its type encoding is checked before every call.
+///
+/// Every method returns `true` when a matching selector was found and called.
+@MainActor
 public enum GlassVariantBridge {
     private typealias IntegerSetter = @convention(c) (AnyObject, Selector, Int) -> Void
     private typealias IntegerGetter = @convention(c) (AnyObject, Selector) -> Int
-    private typealias ObjectSetter = @convention(c) (AnyObject, Selector, NSString?) -> Void
-    private typealias ObjectGetter = @convention(c) (AnyObject, Selector) -> NSString?
+    private typealias BoolSetter = @convention(c) (AnyObject, Selector, Bool) -> Void
+    private typealias DoubleSetter = @convention(c) (AnyObject, Selector, Double) -> Void
+    private typealias ObjectSetter = @convention(c) (AnyObject, Selector, AnyObject?) -> Void
+    private typealias ObjectGetter = @convention(c) (AnyObject, Selector) -> AnyObject?
+    private typealias PathSetter = @convention(c) (AnyObject, Selector, CGPath?) -> Void
 
     private static let variantSetters = ["set_variant:", "setVariant:"]
     private static let variantGetters = ["_variant", "variant"]
     private static let subvariantSetters = ["set_subvariant:", "setSubvariant:", "_setSubvariant:"]
     private static let subvariantGetters = ["_subvariant", "subvariant"]
+    private static let tintSetters = ["setTintColor:"]
+    private static let interactiveSetters = ["setEffectIsInteractive:", "set_effectIsInteractive:"]
+    private static let cornerRadiusSetters = ["setCornerRadius:"]
+    private static let contentViewSetters = ["setContentView:"]
+    private static let pathSetters = ["_setPath:"]
 
     /// `true` when this system has `NSGlassEffectView`. Says nothing about whether the
     /// variant selectors still exist; use ``variant(of:)`` for that.
-    public static var isAvailable: Bool {
+    public nonisolated static var isAvailable: Bool {
         NSClassFromString("NSGlassEffectView") is NSView.Type
     }
 
@@ -34,93 +45,142 @@ public enum GlassVariantBridge {
         return type.init(frame: .zero)
     }
 
-    /// Sets the main variant. Returns `true` if a matching setter was found and called.
+    /// Sets the main variant.
     @discardableResult
     public static func apply(_ variant: GlassVariant, to object: AnyObject) -> Bool {
-        setInteger(variant.rawValue, candidates: variantSetters, on: object)
+        set(.integer(variant.rawValue), candidates: variantSetters, on: object)
     }
 
-    /// Sets the subvariant. Returns `true` if a matching setter was found and called.
+    /// Sets the subvariant.
     ///
-    /// Recent macOS takes the subvariant as a name string (`set_subvariant:` is `v@:@`); older
-    /// builds took an integer. Both are tried. The string setter accepts any string, so `true`
-    /// means "called", not "the system recognised the name".
+    /// Recent macOS takes the subvariant as a name string (`set_subvariant:` is `v@:@`). The
+    /// setter accepts any string, so `true` means "called", not "the system recognised the name".
     @discardableResult
     public static func apply(_ subvariant: GlassSubvariant, to object: AnyObject) -> Bool {
-        setString(String(describing: subvariant), candidates: subvariantSetters, on: object)
-            || setInteger(subvariant.rawValue, candidates: subvariantSetters, on: object)
+        set(.object(subvariant.rawValue as NSString), candidates: subvariantSetters, on: object)
+    }
+
+    /// Sets the tint colour (`NSGlassEffectView.tintColor`, public). `nil` clears it.
+    @discardableResult
+    public static func apply(tint: NSColor?, to object: AnyObject) -> Bool {
+        set(.object(tint), candidates: tintSetters, on: object)
+    }
+
+    /// Turns interactive glass on or off (`NSGlassEffectView.effectIsInteractive`, macOS 27+).
+    @discardableResult
+    public static func setInteractive(_ isInteractive: Bool, on object: AnyObject) -> Bool {
+        set(.bool(isInteractive), candidates: interactiveSetters, on: object)
+    }
+
+    /// Sets the corner radius (`NSGlassEffectView.cornerRadius`, public).
+    @discardableResult
+    public static func setCornerRadius(_ radius: CGFloat, on object: AnyObject) -> Bool {
+        set(.double(Double(radius)), candidates: cornerRadiusSetters, on: object)
+    }
+
+    /// Sets the view the glass wraps (`NSGlassEffectView.contentView`, public). Only the content
+    /// view is guaranteed to sit inside the glass; other subviews have no defined z-order.
+    @discardableResult
+    public static func setContentView(_ view: NSView?, on object: AnyObject) -> Bool {
+        set(.object(view), candidates: contentViewSetters, on: object)
+    }
+
+    /// Gives the glass an arbitrary outline (private `_setPath:`), in the view's own
+    /// coordinates with the origin at the bottom left. `nil` goes back to the corner radius.
+    @discardableResult
+    public static func setPath(_ path: CGPath?, on object: AnyObject) -> Bool {
+        set(.path(path), candidates: pathSetters, on: object)
     }
 
     /// The variant currently set on `object`, or `nil` if it cannot be read.
     public static func variant(of object: AnyObject) -> GlassVariant? {
-        getInteger(candidates: variantGetters, from: object).flatMap(GlassVariant.init(rawValue:))
+        guard let value = integerValue(candidates: variantGetters, from: object) else { return nil }
+        return GlassVariant(rawValue: value)
     }
 
     /// The subvariant currently set on `object`, or `nil` if it cannot be read.
     public static func subvariant(of object: AnyObject) -> GlassSubvariant? {
-        if let name = getString(candidates: subvariantGetters, from: object) {
-            return GlassSubvariant.allCases.first { String(describing: $0) == name }
-        }
-        return getInteger(candidates: subvariantGetters, from: object).flatMap(GlassSubvariant.init(rawValue:))
+        guard let match = lookup(object, candidates: subvariantGetters, signature: .getter(returning: { $0 == "@" })) else { return nil }
+        let getter = unsafeBitCast(match.implementation, to: ObjectGetter.self)
+        guard let name = getter(object, match.selector) as? String else { return nil }
+        return GlassSubvariant(rawValue: name)
     }
 
     // MARK: - Runtime plumbing
 
-    private static func setInteger(_ value: Int, candidates: [String], on object: AnyObject) -> Bool {
-        let cls: AnyClass = object_getClass(object) ?? type(of: object)
-        for name in candidates {
-            let selector = NSSelectorFromString(name)
-            guard let method = class_getInstanceMethod(cls, selector),
-                  hasSignature(method, arguments: 3, returns: "v", integerArgument: true)
-            else { continue }
-            let setter = unsafeBitCast(method_getImplementation(method), to: IntegerSetter.self)
-            setter(object, selector, value)
-            return true
+    /// What a selector must look like before it is called: `(self, _cmd[, argument]) -> returns`.
+    private struct Signature {
+        var argumentCount: UInt32
+        var returns: (String) -> Bool
+        var argument: ((String) -> Bool)?
+
+        static func getter(returning accepts: @escaping (String) -> Bool) -> Signature {
+            Signature(argumentCount: 2, returns: accepts, argument: nil)
         }
-        return false
     }
 
-    private static func getInteger(candidates: [String], from object: AnyObject) -> Int? {
+    private enum Argument {
+        case integer(Int)
+        case bool(Bool)
+        case double(Double)
+        case object(AnyObject?)
+        case path(CGPath?)
+
+        var signature: Signature {
+            Signature(argumentCount: 3, returns: { $0 == "v" }, argument: accepts)
+        }
+
+        /// Only 64-bit integers (`NSInteger` is `q`) are accepted. Narrower encodings are rejected
+        /// so an IMP call can never read or write the wrong register width. `BOOL` is `B` on
+        /// arm64 and `c` on Intel.
+        private var accepts: (String) -> Bool {
+            switch self {
+            case .integer: { $0 == "q" || $0 == "Q" }
+            case .bool: { $0 == "B" || $0 == "c" }
+            case .double: { $0 == "d" }
+            case .object: { $0 == "@" }
+            case .path: { $0.hasSuffix("^{CGPath=}") }
+            }
+        }
+    }
+
+    private static func lookup(
+        _ object: AnyObject,
+        candidates: [String],
+        signature: Signature
+    ) -> (selector: Selector, implementation: IMP)? {
         let cls: AnyClass = object_getClass(object) ?? type(of: object)
         for name in candidates {
             let selector = NSSelectorFromString(name)
             guard let method = class_getInstanceMethod(cls, selector),
-                  hasSignature(method, arguments: 2, returns: nil, integerArgument: false)
+                  method_getNumberOfArguments(method) == signature.argumentCount,
+                  signature.returns(encoding(ofReturn: method))
             else { continue }
-            let getter = unsafeBitCast(method_getImplementation(method), to: IntegerGetter.self)
-            return getter(object, selector)
+            if let accepts = signature.argument {
+                guard let argument = encoding(ofArgument: 2, of: method), accepts(argument) else { continue }
+            }
+            return (selector, method_getImplementation(method))
         }
         return nil
     }
 
-    private static func setString(_ value: String, candidates: [String], on object: AnyObject) -> Bool {
-        let cls: AnyClass = object_getClass(object) ?? type(of: object)
-        for name in candidates {
-            let selector = NSSelectorFromString(name)
-            guard let method = class_getInstanceMethod(cls, selector),
-                  method_getNumberOfArguments(method) == 3,
-                  encoding(ofReturn: method) == "v",
-                  encoding(ofArgument: 2, of: method) == "@"
-            else { continue }
-            let setter = unsafeBitCast(method_getImplementation(method), to: ObjectSetter.self)
-            setter(object, selector, value as NSString)
-            return true
+    private static func set(_ argument: Argument, candidates: [String], on object: AnyObject) -> Bool {
+        guard let (selector, implementation) = lookup(object, candidates: candidates, signature: argument.signature) else {
+            return false
         }
-        return false
+        switch argument {
+        case .integer(let value): unsafeBitCast(implementation, to: IntegerSetter.self)(object, selector, value)
+        case .bool(let value): unsafeBitCast(implementation, to: BoolSetter.self)(object, selector, value)
+        case .double(let value): unsafeBitCast(implementation, to: DoubleSetter.self)(object, selector, value)
+        case .object(let value): unsafeBitCast(implementation, to: ObjectSetter.self)(object, selector, value)
+        case .path(let value): unsafeBitCast(implementation, to: PathSetter.self)(object, selector, value)
+        }
+        return true
     }
 
-    private static func getString(candidates: [String], from object: AnyObject) -> String? {
-        let cls: AnyClass = object_getClass(object) ?? type(of: object)
-        for name in candidates {
-            let selector = NSSelectorFromString(name)
-            guard let method = class_getInstanceMethod(cls, selector),
-                  method_getNumberOfArguments(method) == 2,
-                  encoding(ofReturn: method) == "@"
-            else { continue }
-            let getter = unsafeBitCast(method_getImplementation(method), to: ObjectGetter.self)
-            return getter(object, selector) as String?
-        }
-        return nil
+    private static func integerValue(candidates: [String], from object: AnyObject) -> Int? {
+        guard let match = lookup(object, candidates: candidates, signature: .getter(returning: { $0 == "q" || $0 == "Q" })) else { return nil }
+        return unsafeBitCast(match.implementation, to: IntegerGetter.self)(object, match.selector)
     }
 
     private static func encoding(ofReturn method: Method) -> String {
@@ -135,40 +195,20 @@ public enum GlassVariantBridge {
         return String(cString: type)
     }
 
-    /// Checks the type encoding against `(self, _cmd[, integer]) -> void | integer`.
-    private static func hasSignature(
-        _ method: Method,
-        arguments: Int,
-        returns expectedReturn: String?,
-        integerArgument: Bool
-    ) -> Bool {
-        guard method_getNumberOfArguments(method) == UInt32(arguments) else { return false }
-
-        let returnType = method_copyReturnType(method)
-        defer { free(returnType) }
-        let returned = String(cString: returnType)
-        if let expectedReturn {
-            guard returned == expectedReturn else { return false }
-        } else {
-            guard isIntegerEncoding(returned) else { return false }
-        }
-
-        guard integerArgument else { return true }
-        guard let argType = method_copyArgumentType(method, 2) else { return false }
-        defer { free(argType) }
-        return isIntegerEncoding(String(cString: argType))
-    }
-
-    /// Only 64-bit integers (`NSInteger` is `q`) are accepted. Narrower encodings are rejected
-    /// so an IMP call can never read or write the wrong register width.
-    private static func isIntegerEncoding(_ encoding: String) -> Bool {
-        encoding == "q" || encoding == "Q"
-    }
-
     #if DEBUG
     /// Prints every `variant`-related selector of `NSGlassEffectView` with its type encoding.
     /// Handy after an OS update to see what Apple renamed.
     public static func dumpVariantSelectors() {
+        dumpSelectors { $0.lowercased().contains("variant") }
+    }
+
+    /// Prints every private (underscore-prefixed) selector of `NSGlassEffectView` with its type
+    /// encoding. A starting point for finding new knobs after an OS update.
+    public static func dumpPrivateSelectors() {
+        dumpSelectors { $0.hasPrefix("_") || $0.hasPrefix("set_") }
+    }
+
+    private static func dumpSelectors(matching filter: (String) -> Bool) {
         guard let cls = NSClassFromString("NSGlassEffectView") else {
             print("[LiquidGlassEffects] NSGlassEffectView not found")
             return
@@ -179,7 +219,7 @@ public enum GlassVariantBridge {
         for index in 0..<Int(count) {
             let method = methods[index]
             let name = NSStringFromSelector(method_getName(method))
-            guard name.lowercased().contains("variant") else { continue }
+            guard filter(name) else { continue }
             let encoding = method_getTypeEncoding(method).map { String(cString: $0) } ?? "?"
             print("[LiquidGlassEffects] \(name) [\(encoding)] args=\(method_getNumberOfArguments(method))")
         }

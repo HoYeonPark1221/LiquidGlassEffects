@@ -34,6 +34,12 @@ public enum GlassVariant: Int, CaseIterable, Identifiable, Sendable {
 
     public var id: Int { rawValue }
 
+    /// `false` for the two variants that draw nothing when used as a plain background
+    /// (`focusBorder` and `focusPlatter`, observed on macOS 27.2).
+    public var drawsOnItsOwn: Bool {
+        self != .focusBorder && self != .focusPlatter
+    }
+
     /// The case name with a capital first letter, e.g. `.controlCenter` -> "ControlCenter".
     public var label: String {
         let raw = String(describing: self)
@@ -43,23 +49,149 @@ public enum GlassVariant: Int, CaseIterable, Identifiable, Sendable {
 
 /// A finer variant layered on top of a ``GlassVariant``.
 ///
-/// Names are strings (`DesignLibrary`'s `GlassMaterialProvider.Subvariant` is created from a
-/// `String`). On macOS 27.2 every case except `track` is in Apple's name table, which is longer
-/// than this enum; `tab` sits where `track` would be, so `track` is unverified. On current macOS
-/// `set_subvariant:` takes an `NSString`, so the bridge passes the case name. The raw value is
-/// only used by the integer fallback. The setter accepts any string, so a successful `apply`
-/// means "sent", not "recognised".
-public enum GlassSubvariant: Int, CaseIterable, Identifiable, Sendable {
-    case `default` = 0
-    case lockscreenControls = 1
-    case homescreenClose = 2
-    case camera = 3
-    case posterSwitcher = 4
-    case homescreenResizeHandle = 5
-    case cursorAccessory = 6
-    case homescreenFolder = 7
-    case track = 8
-    case focusedButtonFill = 9
+/// A subvariant is a name. `DesignLibrary`'s `GlassMaterialProvider.Subvariant` is created from a
+/// `String`, and on macOS 27.2 `set_subvariant:` takes an `NSString`. The 53 names here are the
+/// ones in Apple's name table on that release, in table order; ``allCases`` lists them all.
+///
+/// Any string is accepted, so a name Apple adds later can be tried without a package update:
+///
+/// ```swift
+/// .privateGlassBackground(.dock, subvariant: "someNewName")
+/// ```
+///
+/// The setter accepts any string, so a successful `GlassVariantBridge.apply` means
+/// "sent", not "recognised". Many names only change the glass slightly, and the ones aimed at
+/// iOS or watchOS surfaces may render differently on macOS.
+public struct GlassSubvariant: RawRepresentable, Hashable, Identifiable, Sendable, ExpressibleByStringLiteral, CustomStringConvertible, CaseIterable {
+    public let rawValue: String
 
-    public var id: Int { rawValue }
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public init(_ name: String) {
+        self.rawValue = name
+    }
+
+    public init(stringLiteral value: String) {
+        self.rawValue = value
+    }
+
+    public var id: String { rawValue }
+    public var description: String { rawValue }
+
+    public static let `default` = GlassSubvariant("default")
+    public static let lockscreenControls = GlassSubvariant("lockscreenControls")
+    public static let lockscreenNotifications = GlassSubvariant("lockscreenNotifications")
+    public static let lockscreenPriorityNotifications = GlassSubvariant("lockscreenPriorityNotifications")
+    public static let homescreenClose = GlassSubvariant("homescreenClose")
+    public static let camera = GlassSubvariant("camera")
+    public static let posterSwitcher = GlassSubvariant("posterSwitcher")
+    public static let homescreenResizeHandle = GlassSubvariant("homescreenResizeHandle")
+    public static let cursorAccessory = GlassSubvariant("cursorAccessory")
+    public static let transientCanvas = GlassSubvariant("transientCanvas")
+    public static let listening = GlassSubvariant("listening")
+    public static let thinking = GlassSubvariant("thinking")
+    public static let response = GlassSubvariant("response")
+    public static let spotlightField = GlassSubvariant("spotlightField")
+    public static let searchResults = GlassSubvariant("searchResults")
+    public static let compose = GlassSubvariant("compose")
+    public static let homescreenFolder = GlassSubvariant("homescreenFolder")
+    public static let tab = GlassSubvariant("tab")
+    public static let focusedButtonFill = GlassSubvariant("focusedButtonFill")
+    public static let entryField = GlassSubvariant("entryField")
+    public static let volumeSlider = GlassSubvariant("volumeSlider")
+    public static let customizeSheet = GlassSubvariant("customizeSheet")
+    public static let watchFacePhotos = GlassSubvariant("watchFacePhotos")
+    public static let watchFacePhotosMini = GlassSubvariant("watchFacePhotosMini")
+    public static let watchFaceFlowStencil = GlassSubvariant("watchFaceFlowStencil")
+    public static let watchFaceFlowSolid = GlassSubvariant("watchFaceFlowSolid")
+    public static let watchPasscode = GlassSubvariant("watchPasscode")
+    public static let homescreenAppLibraryPod = GlassSubvariant("homescreenAppLibraryPod")
+    public static let menu = GlassSubvariant("menu")
+    public static let window = GlassSubvariant("window")
+    public static let documentModalWindow = GlassSubvariant("documentModalWindow")
+    public static let watchSmartStack = GlassSubvariant("watchSmartStack")
+    public static let watchSmartStackFace = GlassSubvariant("watchSmartStackFace")
+    public static let watchSmartStackAnimatedContent = GlassSubvariant("watchSmartStackAnimatedContent")
+    public static let siriSnippet = GlassSubvariant("siriSnippet")
+    public static let alarmSlider = GlassSubvariant("alarmSlider")
+    public static let alarmSliderRed = GlassSubvariant("alarmSliderRed")
+    public static let contactsQuickAction = GlassSubvariant("contactsQuickAction")
+    public static let mapsSign = GlassSubvariant("mapsSign")
+    public static let mapsNavigationSign = GlassSubvariant("mapsNavigationSign")
+    public static let sheet = GlassSubvariant("sheet")
+    public static let messagesTapback = GlassSubvariant("messagesTapback")
+    public static let cluster = GlassSubvariant("cluster")
+    public static let secondaryCluster = GlassSubvariant("secondaryCluster")
+    public static let dock = GlassSubvariant("dock")
+    public static let appSwitcher = GlassSubvariant("appSwitcher")
+    public static let watchDetuned = GlassSubvariant("watchDetuned")
+    public static let homeModularFace = GlassSubvariant("homeModularFace")
+    public static let homeFaceFlow = GlassSubvariant("homeFaceFlow")
+    public static let tvPortraitClock = GlassSubvariant("tvPortraitClock")
+    public static let hdr = GlassSubvariant("hdr")
+    public static let campoCard = GlassSubvariant("campoCard")
+    public static let homeLiveActivity = GlassSubvariant("homeLiveActivity")
+
+    /// Present in 0.1.0 but not in Apple's name table on macOS 27.2 (`tab` sits where it would be).
+    @available(*, deprecated, message: "Not in Apple's name table on macOS 27.2; try .tab")
+    public static let track = GlassSubvariant("track")
+
+    /// Every name in Apple's table on macOS 27.2, in table order.
+    public static let allCases: [GlassSubvariant] = [
+        .`default`,
+        .lockscreenControls,
+        .lockscreenNotifications,
+        .lockscreenPriorityNotifications,
+        .homescreenClose,
+        .camera,
+        .posterSwitcher,
+        .homescreenResizeHandle,
+        .cursorAccessory,
+        .transientCanvas,
+        .listening,
+        .thinking,
+        .response,
+        .spotlightField,
+        .searchResults,
+        .compose,
+        .homescreenFolder,
+        .tab,
+        .focusedButtonFill,
+        .entryField,
+        .volumeSlider,
+        .customizeSheet,
+        .watchFacePhotos,
+        .watchFacePhotosMini,
+        .watchFaceFlowStencil,
+        .watchFaceFlowSolid,
+        .watchPasscode,
+        .homescreenAppLibraryPod,
+        .menu,
+        .window,
+        .documentModalWindow,
+        .watchSmartStack,
+        .watchSmartStackFace,
+        .watchSmartStackAnimatedContent,
+        .siriSnippet,
+        .alarmSlider,
+        .alarmSliderRed,
+        .contactsQuickAction,
+        .mapsSign,
+        .mapsNavigationSign,
+        .sheet,
+        .messagesTapback,
+        .cluster,
+        .secondaryCluster,
+        .dock,
+        .appSwitcher,
+        .watchDetuned,
+        .homeModularFace,
+        .homeFaceFlow,
+        .tvPortraitClock,
+        .hdr,
+        .campoCard,
+        .homeLiveActivity
+    ]
 }
