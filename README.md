@@ -2,7 +2,7 @@
 
 SwiftUI access to the 24 Liquid Glass material variants (and 10 of the subvariants) inside AppKit's `NSGlassEffectView` — far more than the two (`.regular` / `.clear`) that the public `.glassEffect` API exposes.
 
-![All 24 variants, each over the same photo](Docs/gallery.png)
+![All 24 variants, each over the same photo](Docs/gallery-photo.png)
 
 *All 24 variants, each over its own copy of the same photo crop, so only the glass differs. `FocusBorder` and `FocusPlatter` draw nothing on their own. From a demo app that is not part of this package. macOS 27.2, active window: in an inactive window the glass renders flat and most variants look alike.*
 
