@@ -29,7 +29,7 @@ cd LiquidGlassEffects/Examples/GlassLab
 swift run
 ```
 
-Or download `GlassLab.zip` from the [Releases](https://github.com/HoYeonPark1221/LiquidGlassEffects/releases) page. It is ad-hoc signed, so on first launch right-click the app and choose Open.
+Or download `GlassLab.zip` from the [Releases](https://github.com/HoYeonPark1221/LiquidGlassEffects/releases) page. It is ad-hoc signed and not notarized, so macOS blocks it on first launch: open System Settings > Privacy & Security and click Open Anyway, or run `xattr -dr com.apple.quarantine GlassLab.app` in the folder you unzipped it to.
 
 ![GlassLab: variant list, a draggable glass panel, and an inspector](Docs/glasslab-playground.png)
 
