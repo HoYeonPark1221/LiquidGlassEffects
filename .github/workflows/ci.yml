@@ -21,6 +21,8 @@ jobs:
         run: swift build
       - name: Test
         run: swift test
+      # The demo only shows anything on macOS 26; below that it is a blur with nothing to see.
       - name: Build GlassLab
+        if: matrix.macos == '26'
         run: swift build
         working-directory: Examples/GlassLab

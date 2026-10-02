@@ -6,7 +6,7 @@ A playground for [LiquidGlassEffects](../..): pick any of the 24 variants and 53
 swift run
 ```
 
-Needs macOS 14 to run; the real glass needs macOS 26. Keep the window active, because glass renders flat in an inactive one.
+Use macOS 26 or later: that is where the real glass exists. The window opens on macOS 14 and 15, but you only see the blur fallback there, so there is little to look at, and CI builds the demo on macOS 26 only. Keep the window active, because glass renders flat in an inactive one.
 
 To build a double-clickable `GlassLab.app`, run `Scripts/make-demo-app.sh` from the repository root.
 
